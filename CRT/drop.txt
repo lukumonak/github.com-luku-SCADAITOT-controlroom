@@ -1,0 +1,36 @@
+ <td style={tdStyle}>
+   <span
+     style={{
+       background: '#e8eef6',
+       color: '#1a3a6b',
+       padding: '2px 8px',
+       fontSize: 11,
+       fontWeight: 700
+     }}
+   >
+     IT
+   </span>
+ </td>
+
+----------------------------------------------------------------------
+ drop2
+--------
+ <td style={tdStyle}>
+  <span
+    style={{
+      background: '#e0f2fe',
+      color: '#028090',
+      padding: '2px 8px',
+      fontSize: 11,
+      fontWeight: 700
+    }}
+  >
+    OT
+  </span>
+</td>
+---------------------------------------------------------------------------
+drop3
+-------------
+// <p style="margin:8px 0 0;font-size:12px;color:#78350f;">
+  // ${dutyPerson.email}
+// </p>

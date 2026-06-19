@@ -1,0 +1,101 @@
+.detail-panel {
+  background: #ffffff;
+  border: 1px solid #cccccc;
+  border-top: 3px solid #1a3a6b;
+  padding: 0;
+  height: fit-content;
+  position: sticky;
+  top: 20px;
+}
+
+.detail-header {
+  background: #e8eef6;
+  padding: 10px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #cccccc;
+}
+
+.detail-header h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a3a6b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.detail-body {
+  padding: 16px;
+}
+
+.detail-image {
+  width: 100%;
+  border: 1px solid #cccccc;
+  margin-bottom: 14px;
+}
+
+.detail-field {
+  margin-bottom: 12px;
+}
+
+.detail-field-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #555555;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 3px;
+}
+
+.detail-field-value {
+  font-size: 13px;
+  color: #1a1a1a;
+}
+
+.remarks-section {
+  border-top: 1px solid #e0e0e0;
+  padding-top: 14px;
+  margin-top: 14px;
+}
+
+.remarks-heading {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1a3a6b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+.remarks-list {
+  max-height: 180px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+  border: 1px solid #e0e0e0;
+}
+
+.remark-box {
+  padding: 8px 12px;
+  border-bottom: 1px solid #e0e0e0;
+  background: #fafafa;
+}
+
+.remark-box:last-child {
+  border-bottom: none;
+}
+
+.remark-meta {
+  font-size: 11px;
+  color: #888888;
+  margin-top: 3px;
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  color: #555555;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}

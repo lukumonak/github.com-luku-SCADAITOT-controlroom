@@ -1,0 +1,137 @@
+.section-heading {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a3a6b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 10px 14px;
+  background: #e8eef6;
+  border: 1px solid #cccccc;
+  border-bottom: 2px solid #1a3a6b;
+}
+
+.ticket-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #ffffff;
+  border: 1px solid #cccccc;
+}
+
+.ticket-table th {
+  background: #f5f7fa;
+  border: 1px solid #cccccc;
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #1a3a6b;
+  white-space: nowrap;
+}
+
+.ticket-table td {
+  border: 1px solid #e5e7eb;
+  padding: 10px 14px;
+  font-size: 13px;
+  vertical-align: middle;
+  color: #1a1a1a;
+}
+
+.ticket-table tbody tr:nth-child(even) td {
+  background: #f9fafb;
+}
+
+.ticket-table tbody tr:hover td {
+  background: #eef3fb;
+  cursor: pointer;
+}
+
+.ticket-table tr.selected-row td {
+  background: #dbeafe;
+}
+
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border: 1px solid;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+
+.badge-critical {
+  color: #991b1b;
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+.badge-high {
+  color: #9a3412;
+  border-color: #fdba74;
+  background: #fff7ed;
+}
+.badge-medium {
+  color: #166534;
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+.badge-low {
+  color: #1e40af;
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.badge-open {
+  color: #991b1b;
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+.badge-in_progress {
+  color: #9a3412;
+  border-color: #fdba74;
+  background: #fff7ed;
+}
+.badge-resolved {
+  color: #166534;
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.delete-btn {
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  color: #b91c1c;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+
+.delete-btn:hover {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+.grid-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.ticket-layout {
+  grid-template-columns: 1fr 360px;
+}
+
+.no-tickets {
+  background: #ffffff;
+  border: 1px solid #cccccc;
+  padding: 30px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 13px;
+}
