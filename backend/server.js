@@ -1,5 +1,7 @@
 const express = require('express');
-const { sendTicketCreatedEmail } = require('./mailer')
+const { sendTicketCreatedEmail, sendWelcomeEmail, sendForgotPasswordEmail } = require('./mailer')
+const bcrypt = require('bcryptjs')
+const crypto = require('crypto')
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -49,7 +51,8 @@ app.get('/api/tickets', async (req, res) => {
 
 // ─── POST create ticket ───
 app.post('/api/tickets', upload.single('image'), async (req, res) => {
-  const { title, description, severity, created_by, department } = req.body
+  const { title, description, severity, created_by, department, status, assigned_to, roc, man_hour_lost } = req.body
+  console.log('PATCH body:', req.body)
 
   if (!title) {
     return res.status(400).json({ success: false, error: 'Title is required' })
@@ -80,7 +83,7 @@ app.post('/api/tickets', upload.single('image'), async (req, res) => {
     const image_url = req.file ? `/uploads/${req.file.filename}` : null
     const dept = department || 'NERLDC IT'
     const deptShort = dept === 'NERLDC IT' ? 'IT' : 'OT'
-
+    // const { title, description, severity, created_by, department } = req.body
     // INSERT TICKET
     const result = await pool.query(
       `INSERT INTO tickets (ticket_no, title, description, severity, created_by, image_url, department)
@@ -132,29 +135,28 @@ app.post('/api/tickets', upload.single('image'), async (req, res) => {
 // ─── PATCH update ticket ───
 app.patch('/api/tickets/:id', async (req, res) => {
   const { id } = req.params;
-  const { title, description, severity, status, assigned_to } = req.body;
-
+  const { title, description, severity, status, assigned_to, roc, man_hour_lost } = req.body;
   try {
+
     const result = await pool.query(
       `UPDATE tickets
-   SET title       = COALESCE($1, title),
-       description = COALESCE($2, description),
-       severity    = COALESCE($3, severity),
-       status      = COALESCE($4, status),
-       assigned_to = COALESCE($5, assigned_to),
-       updated_at  = NOW(),
-       resolved_at = CASE 
+   SET title          = COALESCE($1, title),
+       description    = COALESCE($2, description),
+       severity       = COALESCE($3, severity),
+       status         = COALESCE($4, status),
+       assigned_to    = COALESCE($5, assigned_to),
+       roc            = COALESCE($6, roc),
+       man_hour_lost  = COALESCE($7, man_hour_lost),
+       updated_at     = NOW(),
+       resolved_at    = CASE
          WHEN $4 = 'resolved' AND resolved_at IS NULL THEN NOW()
          WHEN $4 != 'resolved' THEN NULL
-         ELSE resolved_at 
+         ELSE resolved_at
        END
-   WHERE id = $6 RETURNING *`,
-      [title, description, severity, status, assigned_to, id]
+   WHERE id = $8 RETURNING *`,
+      [title, description, severity, status, assigned_to, roc, man_hour_lost, id]
+
     )
-
-
-
-
 
     if (result.rowCount === 0) {
       return res.status(404).json({ success: false, error: 'Ticket not found' });
@@ -231,15 +233,26 @@ app.post('/api/resolver-login', (req, res) => {
 
 
 // ─── ADMIN LOGIN ───
-app.post('/api/admin-login', (req, res) => {
+app.post('/api/admin-login', async (req, res) => {
   const { password } = req.body
-  if (password === process.env.ADMIN_PASSWORD) {
+  if (!password) return res.status(400).json({ success: false, error: 'Password required' })
+  try {
+    const result = await pool.query(
+      "SELECT * FROM users WHERE role = 'admin' LIMIT 1"
+    )
+    if (result.rowCount === 0) {
+      return res.status(401).json({ success: false, error: 'Admin not found' })
+    }
+    const admin = result.rows[0]
+    const match = await bcrypt.compare(password, admin.password)
+    if (!match) {
+      return res.status(401).json({ success: false, error: 'Wrong password' })
+    }
     res.json({ success: true })
-  } else {
-    res.status(401).json({ success: false, error: 'Wrong password' })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
   }
-});
-
+})
 
 
 // ─── POST add remark ───
@@ -494,6 +507,167 @@ app.patch('/api/tickets/:id/resolver-image', upload.single('image'), async (req,
     res.status(500).json({ success: false, error: err.message })
   }
 })
+
+
+// ─── REGISTER new user ───
+app.post('/api/register', async (req, res) => {
+  const { emp_id, full_name, email } = req.body
+  if (!emp_id || !full_name || !email) {
+    return res.status(400).json({ success: false, error: 'All fields required' })
+  }
+  try {
+    // Check if emp_id or email already exists
+    const existing = await pool.query(
+      'SELECT id FROM users WHERE emp_id = $1 OR email = $2',
+      [emp_id, email]
+    )
+    if (existing.rowCount > 0) {
+      return res.status(409).json({ success: false, error: 'Employee ID or email already registered' })
+    }
+
+    // Generate random password
+    const randomPassword = crypto.randomBytes(4).toString('hex').toUpperCase()
+    const hashedPassword = await bcrypt.hash(randomPassword, 10)
+
+    // Save user
+    const result = await pool.query(
+      `INSERT INTO users (emp_id, full_name, email, password, role)
+       VALUES ($1, $2, $3, $4, 'operator') RETURNING id, emp_id, full_name, email, role`,
+      [emp_id, full_name, email, hashedPassword]
+    )
+
+    // Send email with credentials
+    await sendWelcomeEmail(full_name, email, emp_id, randomPassword)
+
+
+    io.emit('user:registered')
+    res.status(201).json({ success: true, data: result.rows[0] })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+//forgot password
+// ─── FORGOT PASSWORD ───
+app.post('/api/forgot-password', async (req, res) => {
+  const { emp_id } = req.body
+  if (!emp_id) return res.status(400).json({ success: false, error: 'Employee ID required' })
+
+  try {
+    const result = await pool.query('SELECT * FROM users WHERE emp_id = $1', [emp_id])
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, error: 'No account found with this Employee ID' })
+    }
+
+    const user = result.rows[0]
+
+    // Generate new random password
+    const newPassword = crypto.randomBytes(4).toString('hex').toUpperCase()
+    const hashedPassword = await bcrypt.hash(newPassword, 10)
+
+    // Update in database
+    await pool.query('UPDATE users SET password = $1 WHERE emp_id = $2', [hashedPassword, emp_id])
+
+    // Send email
+    await sendForgotPasswordEmail(user.full_name, user.email, emp_id, newPassword)
+
+    res.json({ success: true, message: 'New password sent to registered email' })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+// ─── USER LOGIN ───
+app.post('/api/user-login', async (req, res) => {
+  const { emp_id, password } = req.body
+  if (!emp_id || !password) {
+    return res.status(400).json({ success: false, error: 'Employee ID and password required' })
+  }
+  try {
+    const result = await pool.query(
+      'SELECT * FROM users WHERE emp_id = $1', [emp_id]
+    )
+    if (result.rowCount === 0) {
+      return res.status(401).json({ success: false, error: 'Invalid Employee ID or password' })
+    }
+    const user = result.rows[0]
+    const match = await bcrypt.compare(password, user.password)
+    if (!match) {
+      return res.status(401).json({ success: false, error: 'Invalid Employee ID or password' })
+    }
+    res.json({
+      success: true,
+      data: {
+        emp_id: user.emp_id,
+        full_name: user.full_name,
+        email: user.email,
+        role: user.role
+      }
+    })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+// ─── CHANGE PASSWORD ───
+app.post('/api/change-password', async (req, res) => {
+  const { emp_id, new_password } = req.body
+  if (!emp_id || !new_password) {
+    return res.status(400).json({ success: false, error: 'Required fields missing' })
+  }
+  try {
+    const hashedPassword = await bcrypt.hash(new_password, 10)
+    await pool.query(
+      'UPDATE users SET password = $1 WHERE emp_id = $2',
+      [hashedPassword, emp_id]
+    )
+    res.json({ success: true, message: 'Password changed successfully' })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+// ─── GET all users (admin only) ───
+app.get('/api/users', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, emp_id, full_name, email, role, created_at FROM users ORDER BY created_at DESC'
+    )
+    res.json({ success: true, data: result.rows })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+// ─── UPDATE user role (admin only) ───
+app.patch('/api/users/:id/role', async (req, res) => {
+  const { id } = req.params
+  const { role } = req.body
+  if (!['operator', 'resolver'].includes(role)) {
+    return res.status(400).json({ success: false, error: 'Invalid role' })
+  }
+  try {
+    const result = await pool.query(
+      'UPDATE users SET role = $1 WHERE id = $2 RETURNING *',
+      [role, id]
+    )
+    const updatedUser = result.rows[0]
+    // Force logout that user
+    io.emit('user:role_changed', { emp_id: updatedUser.emp_id, new_role: role })
+    res.json({ success: true, data: updatedUser })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+// ─── DELETE user (admin only) ───
+app.delete('/api/users/:id', async (req, res) => {
+  const { id } = req.params
+  try {
+    await pool.query('DELETE FROM users WHERE id = $1', [id])
+    res.json({ success: true, message: 'User deleted' })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
 
 // ─── Socket connection ───
 io.on('connection', (socket) => {

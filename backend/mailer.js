@@ -112,4 +112,74 @@ const sendTicketCreatedEmail = async (ticket, department, dutyPerson) => {
   console.log(`📧 Email sent for ${ticket.ticket_no} → To: ${toEmails}`)
 }
 
-module.exports = { sendTicketCreatedEmail }
+
+const sendWelcomeEmail = async (name, email, empId, password) => {
+  await transporter.sendMail({
+    from: `"Control Room Ticketing" <${process.env.GMAIL_USER}>`,
+    to: email,
+    subject: 'Welcome to CRT — Your Login Credentials',
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #ccc;">
+        <div style="background:#1a3a6b;padding:16px 24px;border-bottom:4px solid #f0a500;">
+          <h2 style="color:#fff;margin:0;font-size:18px;">⚡ Control Room Ticketing System</h2>
+        </div>
+        <div style="padding:24px;background:#fff;">
+          <p style="font-size:14px;color:#1a1a1a;">Dear <strong>${name}</strong>,</p>
+          <p style="font-size:13px;color:#555;">Your account has been created. Use the credentials below to login:</p>
+          <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+            <tr style="background:#e8eef6;">
+              <td style="padding:10px 14px;font-weight:700;color:#1a3a6b;border:1px solid #ccc;">Employee ID</td>
+              <td style="padding:10px 14px;border:1px solid #ccc;font-size:16px;font-weight:700;">${empId}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 14px;font-weight:700;color:#1a3a6b;border:1px solid #ccc;">Password</td>
+              <td style="padding:10px 14px;border:1px solid #ccc;font-size:16px;font-weight:700;color:#b91c1c;">${password}</td>
+            </tr>
+          </table>
+          <p style="font-size:12px;color:#888;">You can change your password from your profile after logging in.</p>
+        </div>
+        <div style="background:#f5f5f5;padding:12px 24px;border-top:1px solid #e0e0e0;">
+          <p style="font-size:11px;color:#888;margin:0;">Do not share your credentials with anyone.</p>
+        </div>
+      </div>
+    `
+  })
+  console.log(`📧 Welcome email sent to ${email}`)
+}
+
+
+const sendForgotPasswordEmail = async (name, email, empId, newPassword) => {
+  await transporter.sendMail({
+    from: `"Control Room Ticketing" <${process.env.GMAIL_USER}>`,
+    to: email,
+    subject: 'CRT — Password Reset',
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #ccc;">
+        <div style="background:#1a3a6b;padding:16px 24px;border-bottom:4px solid #f0a500;">
+          <h2 style="color:#fff;margin:0;font-size:18px;">⚡ Control Room Ticketing System</h2>
+        </div>
+        <div style="padding:24px;background:#fff;">
+          <p style="font-size:14px;color:#1a1a1a;">Dear <strong>${name}</strong>,</p>
+          <p style="font-size:13px;color:#555;">Your password has been reset. Use the new credentials below:</p>
+          <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+            <tr style="background:#e8eef6;">
+              <td style="padding:10px 14px;font-weight:700;color:#1a3a6b;border:1px solid #ccc;">Employee ID</td>
+              <td style="padding:10px 14px;border:1px solid #ccc;font-size:16px;font-weight:700;">${empId}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 14px;font-weight:700;color:#1a3a6b;border:1px solid #ccc;">New Password</td>
+              <td style="padding:10px 14px;border:1px solid #ccc;font-size:16px;font-weight:700;color:#b91c1c;">${newPassword}</td>
+            </tr>
+          </table>
+          <p style="font-size:12px;color:#888;">Please change your password after logging in from your Profile page.</p>
+        </div>
+        <div style="background:#f5f5f5;padding:12px 24px;border-top:1px solid #e0e0e0;">
+          <p style="font-size:11px;color:#888;margin:0;">Do not share your credentials with anyone.</p>
+        </div>
+      </div>
+    `
+  })
+  console.log(`📧 Password reset email sent to ${email}`)
+}
+
+module.exports = { sendTicketCreatedEmail, sendWelcomeEmail, sendForgotPasswordEmail }

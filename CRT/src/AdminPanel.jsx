@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
+import { io } from 'socket.io-client'
+const socket = io('http://localhost:5000', { autoConnect: true })
 import * as XLSX from 'xlsx'
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
@@ -13,7 +15,7 @@ export default function AdminPanel ({ isAdmin = false, onExport }) {
   const [newEmp, setNewEmp] = useState({
     name: '',
     email: '',
-    department: 'IT'
+    department: ''
   })
 
   // ── Duty state ──
@@ -21,19 +23,42 @@ export default function AdminPanel ({ isAdmin = false, onExport }) {
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [overlapError, setOverlapError] = useState(null)
   const [assignForm, setAssignForm] = useState({
-    department: 'IT',
+    department: '',
     employee_id: '',
     duty_date: '',
     end_date: '',
     start_time: '09:00',
     end_time: '08:59'
   })
+  const [users, setUsers] = useState([])
+
+  const fetchUsers = async () => {
+    try {
+      const res = await axios.get(`${API}/users`)
+      setUsers(res.data.data)
+    } catch (err) {
+      console.error(err)
+    }
+  }
 
   useEffect(() => {
     fetchEmployees()
     fetchDuties()
+    if (isAdmin) fetchUsers()
   }, [])
 
+  useEffect(() => {
+    socket.on('user:registered', () => {
+      if (isAdmin) fetchUsers()
+    })
+    socket.on('duty:updated', () => {
+      fetchDuties()
+    })
+    return () => {
+      socket.off('user:registered')
+      socket.off('duty:updated')
+    }
+  }, [])
   // ══════════════════════════════════
   // Master list functions
   // ══════════════════════════════════
@@ -43,7 +68,9 @@ export default function AdminPanel ({ isAdmin = false, onExport }) {
   }
 
   const addEmployee = async () => {
-    if (!newEmp.name || !newEmp.email) return alert('Name and email required')
+    if (!newEmp.name) return alert('Name is required')
+    if (!newEmp.email) return alert('Email is required')
+    if (!newEmp.department) return alert('Please select a department')
     await axios.post(`${API}/employees`, newEmp)
     setNewEmp({ name: '', email: '', department: 'IT' })
     setShowAddEmp(false)
@@ -72,7 +99,7 @@ export default function AdminPanel ({ isAdmin = false, onExport }) {
 
   const openAddModal = () => {
     setAssignForm({
-      department: 'IT',
+      department: '',
       employee_id: '',
       duty_date: '',
       end_date: '',
@@ -93,6 +120,7 @@ export default function AdminPanel ({ isAdmin = false, onExport }) {
       end_time
     } = assignForm
 
+    if (!department) return alert('Select a department')
     if (!employee_id) return alert('Select an employee')
     if (!duty_date) return alert('Select start date')
     if (!end_date) return alert('Select end date')
@@ -221,7 +249,7 @@ export default function AdminPanel ({ isAdmin = false, onExport }) {
       Email: d.email,
       Department: 'OT'
     }))
-    // ✅ Check BEFORE writing
+    // Check BEFORE writing
     console.log('OT rows:', otData.length)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(
@@ -256,7 +284,8 @@ export default function AdminPanel ({ isAdmin = false, onExport }) {
       >
         {[
           ['master', 'Employee Master List'],
-          ['calendar', 'Duty Assignment']
+          ['calendar', 'Duty Assignment'],
+          ...(isAdmin ? [['users', 'User Management']] : [])
         ].map(([key, label]) => (
           <button
             key={key}
@@ -380,6 +409,7 @@ export default function AdminPanel ({ isAdmin = false, onExport }) {
                   }
                   style={{ width: 100 }}
                 >
+                  <option value=''>SELECT</option>
                   <option value='IT'>IT</option>
                   <option value='OT'>OT</option>
                 </select>
@@ -417,7 +447,7 @@ export default function AdminPanel ({ isAdmin = false, onExport }) {
             >
               <div style={{ display: 'inline' }}>
                 {' '}
-                NERLDC IT Department ({itEmployees.length} employees)
+                <div style={{ display: 'inline' }}>NERLDC IT — Duty List</div>
               </div>
               <div style={{ display: 'inline' }}>
                 {' '}
@@ -962,6 +992,150 @@ export default function AdminPanel ({ isAdmin = false, onExport }) {
       )}
 
       {/* ══════════════════════════════════
+          USER MANAGEMENT TAB
+      ══════════════════════════════════ */}
+      {tab === 'users' && isAdmin && (
+        <div>
+          <div
+            style={{
+              fontSize: 14,
+              fontWeight: 700,
+              color: '#1a3a6b',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              marginBottom: 16
+            }}
+          >
+            Registered Users
+          </div>
+          <table style={tableStyle}>
+            <thead>
+              <tr>
+                {[
+                  'Emp ID',
+                  'Full Name',
+                  'Email',
+                  'Role',
+                  'Registered On',
+                  'Actions'
+                ].map(h => (
+                  <th key={h} style={thStyle}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {users.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    style={{ ...tdStyle, textAlign: 'center', color: '#888' }}
+                  >
+                    No registered users yet
+                  </td>
+                </tr>
+              ) : (
+                users.map(user => (
+                  <tr key={user.id}>
+                    <td style={{ ...tdStyle, fontWeight: 600 }}>
+                      {user.emp_id}
+                    </td>
+                    <td style={tdStyle}>{user.full_name}</td>
+                    <td style={tdStyle}>{user.email}</td>
+                    <td style={tdStyle}>
+                      <span
+                        style={{
+                          background:
+                            user.role === 'resolver' ? '#f0fdf4' : '#e8eef6',
+                          color:
+                            user.role === 'resolver' ? '#15803d' : '#1a3a6b',
+                          padding: '2px 10px',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          textTransform: 'uppercase'
+                        }}
+                      >
+                        {user.role}
+                      </span>
+                    </td>
+                    <td
+                      style={{
+                        ...tdStyle,
+                        fontSize: 12,
+                        fontFamily: 'monospace'
+                      }}
+                    >
+                      {new Date(user.created_at).toLocaleDateString('en-IN', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric'
+                      })}
+                    </td>
+
+                    <td style={tdStyle}>
+                      {user.role === 'admin' ? (
+                        <span style={{ fontSize: 11, color: '#64748b' }}>
+                          —
+                        </span>
+                      ) : (
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button
+                            onClick={async () => {
+                              const newRole =
+                                user.role === 'operator'
+                                  ? 'resolver'
+                                  : 'operator'
+                              await axios.patch(
+                                `${API}/users/${user.id}/role`,
+                                { role: newRole }
+                              )
+                              fetchUsers()
+                            }}
+                            style={{
+                              background:
+                                user.role === 'operator'
+                                  ? '#15803d'
+                                  : '#c2410c',
+                              color: '#fff',
+                              border: 'none',
+                              padding: '4px 10px',
+                              fontSize: 11,
+                              cursor: 'pointer',
+                              fontWeight: 600
+                            }}
+                          >
+                            {user.role === 'operator'
+                              ? '↑ Make Resolver'
+                              : '↓ Make Operator'}
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (
+                                !window.confirm(
+                                  `Delete user ${user.full_name}?`
+                                )
+                              )
+                                return
+                              await axios.delete(`${API}/users/${user.id}`)
+                              fetchUsers()
+                            }}
+                            style={btnRed}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════
           ASSIGN MODAL
       ══════════════════════════════════ */}
       {showAssignModal && (
@@ -1014,6 +1188,7 @@ export default function AdminPanel ({ isAdmin = false, onExport }) {
               }
               style={{ marginBottom: 14 }}
             >
+              <option value=''>-SELECT-</option>
               <option value='IT'>NERLDC IT</option>
               <option value='OT'>NERLDC OT</option>
             </select>

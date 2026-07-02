@@ -6,7 +6,8 @@ import { io } from 'socket.io-client'
 import * as XLSX from 'xlsx'
 
 import Login from './Login'
-
+import Register from './Register'
+import Profile from './Profile'
 import './styles/app.css'
 import './styles/header.css'
 import './styles/stats.css'
@@ -27,13 +28,22 @@ export default function App () {
   const isResolver = role === 'resolver' || role === 'admin'
   const isAdmin = role === 'admin'
 
-  const handleLogin = selectedRole => {
+  const handleLogin = (selectedRole, name, empId, email) => {
     setRole(selectedRole)
+    setUserName(name || '')
+    setUserEmpId(empId || '')
+    setUserEmail(email || '')
   }
 
   const handleLogout = () => {
     setRole(null)
+    setUserName('')
+    setUserEmpId('')
+    setUserEmail('')
     sessionStorage.removeItem('crt_role')
+    sessionStorage.removeItem('crt_name')
+    sessionStorage.removeItem('crt_emp_id')
+    sessionStorage.removeItem('crt_email')
     setSelected(null)
     setShowForm(false)
   }
@@ -55,6 +65,18 @@ export default function App () {
   }, [])
 
   // ─── App State ───
+
+  const [showRegister, setShowRegister] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
+  const [userName, setUserName] = useState(
+    () => sessionStorage.getItem('crt_name') || ''
+  )
+  const [userEmpId, setUserEmpId] = useState(
+    () => sessionStorage.getItem('crt_emp_id') || ''
+  )
+  const [userEmail, setUserEmail] = useState(
+    () => sessionStorage.getItem('crt_email') || ''
+  )
   const [adminTab, setAdminTab] = useState('tickets')
   const [notification, setNotification] = useState(null)
   const [tickets, setTickets] = useState([])
@@ -72,13 +94,14 @@ export default function App () {
   const [imageFile, setImageFile] = useState(null)
   const [pendingStatus, setPendingStatus] = useState(null)
   const [pendingSeverity, setPendingSeverity] = useState(null)
+  const [pendingRoc, setPendingRoc] = useState('')
+  const [pendingManHour, setPendingManHour] = useState('')
   const [imagePreview, setImagePreview] = useState(null)
   const [form, setForm] = useState({
     title: '',
     titleOption: '',
     description: '',
     severity: '',
-    created_by: '',
     department: ''
   })
 
@@ -333,6 +356,13 @@ export default function App () {
 
   // ─── Socket.IO ───
   useEffect(() => {
+    socket.on('user:role_changed', ({ emp_id, new_role }) => {
+      if (userEmpId && emp_id === userEmpId) {
+        alert(`Your role has been changed to ${new_role}. Please login again.`)
+        handleLogout()
+      }
+    })
+
     socket.on('ticket:created', ticket => {
       setTickets(prev => [ticket, ...prev])
     })
@@ -360,6 +390,7 @@ export default function App () {
       socket.off('ticket:deleted')
       socket.off('remark:added')
       socket.off('email:sent')
+      socket.off('user:role_changed')
     }
   }, [])
 
@@ -386,7 +417,6 @@ export default function App () {
 
   const createTicket = async () => {
     if (!form.title) return alert('Please select an issue title')
-    if (!form.created_by.trim()) return alert('Raised By is required')
     if (!imageFile && form.department === 'NERLDC OT')
       return alert('Please attach a photo for OT tickets')
     try {
@@ -395,7 +425,7 @@ export default function App () {
       fd.append('title', form.title)
       fd.append('description', form.description)
       fd.append('severity', form.severity)
-      fd.append('created_by', form.created_by)
+      fd.append('created_by', userName || form.created_by)
       fd.append('department', form.department)
       if (imageFile) fd.append('image', imageFile)
       await axios.post(`${API}/tickets`, fd, {
@@ -407,7 +437,6 @@ export default function App () {
         titleOption: '',
         description: '',
         severity: '',
-        created_by: '',
         department: ''
       })
 
@@ -468,12 +497,13 @@ export default function App () {
       console.error(err)
     }
   }
-
   const openTicket = ticket => {
     setSelected(ticket)
     fetchRemarks(ticket.id)
     setPendingStatus(null)
     setPendingSeverity(null)
+    setPendingRoc(ticket.roc || '')
+    setPendingManHour(ticket.man_hour_lost || '')
     setResolverImageFile(null)
     setResolverImagePreview(null)
   }
@@ -485,12 +515,24 @@ export default function App () {
     resolved: tickets.filter(t => t.status === 'resolved').length
   }
 
-  const headerBg = isAdmin ? '#4c1d95' : isResolver ? '#14532d' : '#1a3a6b'
+  const headerBg = isAdmin ? '#1a3a6b' : isResolver ? '#1a3a6b' : '#1a3a6b'
 
   // ─── Show Login Page ───
-  if (!role) return <Login onLogin={handleLogin} />
+  if (showRegister) return <Register onBack={() => setShowRegister(false)} />
+  if (!role)
+    return (
+      <Login onLogin={handleLogin} onRegister={() => setShowRegister(true)} />
+    )
 
   // ─── Main App ───
+  if (showProfile)
+    return (
+      <Profile
+        user={{ name: userName, empId: userEmpId, email: userEmail, role }}
+        onBack={() => setShowProfile(false)}
+      />
+    )
+
   return (
     <div className='app-container'>
       {!serverOnline && (
@@ -630,6 +672,24 @@ export default function App () {
             >
               Logout
             </button>
+
+            <button
+              onClick={() => setShowProfile(true)}
+              style={{
+                background: 'rgba(255,255,255,0.15)',
+                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.3)',
+                padding: '8px 18px',
+                fontWeight: 700,
+                fontSize: 13,
+                cursor: 'pointer',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px'
+              }}
+            >
+              👤 {userName || 'Profile'}
+            </button>
+
             {isOperator && (
               <button
                 onClick={() => {
@@ -670,7 +730,7 @@ export default function App () {
       >
         {[
           ['tickets', 'Ticket Register'],
-          ...(isAdmin || isResolver ? [['assign', 'Duty List']] : []),
+          ...(isAdmin || isResolver ? [['assign', 'MORE']] : []),
           ...(isOperator ? [['today', "Today's Duty"]] : [])
         ].map(([key, label]) => (
           <button
@@ -683,10 +743,10 @@ export default function App () {
               fontWeight: 700,
               fontSize: 12,
               textTransform: 'uppercase',
-              background: adminTab === key ? '#4c1d95' : 'transparent',
-              color: adminTab === key ? '#fff' : '#4c1d95',
+              background: adminTab === key ? '#1a3a6b' : 'transparent',
+              color: adminTab === key ? '#fff' : '#1a3a6b',
               borderBottom:
-                adminTab === key ? '3px solid #4c1d95' : '3px solid transparent'
+                adminTab === key ? '3px solid #1a3a6b' : '3px solid transparent'
             }}
           >
             {label}
@@ -744,13 +804,10 @@ export default function App () {
                     }}
                   >
                     <option value=''>— Select Issue —</option>
-                    <option value='SCADA Connection Lost'>
-                      SCADA Connection Lost
-                    </option>
-                    <option value='Power Failure'>Power Failure</option>
-                    <option value='Network Down'>Network Down</option>
-                    <option value='Printer Issue'>Printer Issue</option>
-                    <option value='Server Offline'>Server Offline</option>
+                    <option value='SCADA issue'>SCADA issue</option>
+                    <option value='PMU issue'>PMU issue</option>
+                    <option value='VIP issue'>VIP issue</option>
+                    <option value='IT Issue'>IT Issue</option>
                     <option value='Other'>Other</option>
                   </select>
                   {form.titleOption === 'Other' && (
@@ -810,17 +867,6 @@ export default function App () {
                   </select>
                 </div>
 
-                <div>
-                  <label className='input-label'>Raised By *</label>
-                  <input
-                    className='input-field'
-                    placeholder='Operator Name'
-                    value={form.created_by}
-                    onChange={e =>
-                      setForm({ ...form, created_by: e.target.value })
-                    }
-                  />
-                </div>
                 <div className='full-width'>
                   <label className='input-label'>
                     Attach Photo{' '}
@@ -926,6 +972,8 @@ export default function App () {
                       <th>Raised By</th>
                       <th>Raised At</th>
                       <th>Resolved At</th>
+                      {isResolver && <th>RCA</th>}
+                      {isResolver && <th>Man Hour Lost</th>}
                       {isAdmin && <th>Action</th>}
                     </tr>
                   </thead>
@@ -977,6 +1025,26 @@ export default function App () {
                             : '—'}
                         </td>
 
+                        {isResolver && (
+                          <td
+                            style={{
+                              fontSize: 12,
+                              maxWidth: 150,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            {ticket.roc || '—'}
+                          </td>
+                        )}
+                        {isResolver && (
+                          <td style={{ fontSize: 12, textAlign: 'center' }}>
+                            {ticket.man_hour_lost
+                              ? `${ticket.man_hour_lost} hrs`
+                              : '—'}
+                          </td>
+                        )}
                         {isAdmin && (
                           <td>
                             <button
@@ -1121,7 +1189,108 @@ export default function App () {
                       </span>
                     )}
                   </div>
+                  {/* ROC and Man Hour — resolver/admin only */}
+                  {isResolver && (
+                    <div style={{ marginBottom: 16 }}>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: '#1a3a6b',
+                          textTransform: 'uppercase',
+                          marginBottom: 8
+                        }}
+                      >
+                        Root Cause Analysis & Man Hour
+                      </div>
 
+                      <label
+                        style={{
+                          display: 'block',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: '#555',
+                          marginBottom: 4,
+                          textTransform: 'uppercase'
+                        }}
+                      >
+                        ROC (Root Cause Analysis)
+                      </label>
+                      <textarea
+                        className='input-field textarea-field'
+                        placeholder='Describe the root cause...'
+                        value={pendingRoc}
+                        onChange={e => setPendingRoc(e.target.value)}
+                        style={{ height: 70, marginBottom: 10 }}
+                      />
+
+                      <label
+                        style={{
+                          display: 'block',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: '#555',
+                          marginBottom: 4,
+                          textTransform: 'uppercase'
+                        }}
+                      >
+                        Man Hour Lost
+                      </label>
+                      <input
+                        type='number'
+                        min='0'
+                        step='0.5'
+                        className='input-field'
+                        placeholder='e.g. 4.5'
+                        value={pendingManHour}
+                        onChange={e => setPendingManHour(e.target.value)}
+                        style={{ marginBottom: 10 }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Show ROC and Man Hour to resolver/admin read-only if filled */}
+                  {!isResolver && isResolver === false && selected?.roc && (
+                    <div
+                      style={{
+                        marginBottom: 16,
+                        padding: 12,
+                        background: '#f5f7fa',
+                        border: '1px solid #e0e0e0'
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: '#1a3a6b',
+                          textTransform: 'uppercase',
+                          marginBottom: 6
+                        }}
+                      >
+                        Root Cause
+                      </div>
+                      <div style={{ fontSize: 13 }}>{selected.roc}</div>
+                      {selected.man_hour_lost && (
+                        <>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: '#1a3a6b',
+                              textTransform: 'uppercase',
+                              margin: '8px 0 4px'
+                            }}
+                          >
+                            Man Hour Lost
+                          </div>
+                          <div style={{ fontSize: 13 }}>
+                            {selected.man_hour_lost} hrs
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
                   <div className='remarks-section'>
                     <div className='remarks-heading'>
                       Remarks *({remarks.length})
@@ -1258,11 +1427,25 @@ export default function App () {
                           onChange={e => setRemark(e.target.value)}
                           style={{ height: 60, marginBottom: 8 }}
                         />
+
                         <button
                           onClick={async () => {
                             if (!remark.trim()) {
                               alert('Remark is required before submitting')
                               return
+                            }
+                            // Save ROC and Man Hour if changed
+                            if (
+                              pendingRoc !== (selected.roc || '') ||
+                              pendingManHour !== (selected.man_hour_lost || '')
+                            ) {
+                              await axios.patch(
+                                `${API}/tickets/${selected.id}`,
+                                {
+                                  roc: pendingRoc || null,
+                                  man_hour_lost: pendingManHour || null
+                                }
+                              )
                             }
                             if (
                               pendingStatus &&
@@ -1280,6 +1463,8 @@ export default function App () {
                             setSelected(null)
                             setPendingStatus(null)
                             setPendingSeverity(null)
+                            setPendingRoc('')
+                            setPendingManHour('')
                           }}
                           style={{
                             width: '100%',
